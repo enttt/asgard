@@ -15,16 +15,25 @@
  */
 package com.netflix.asgard
 
-class NamesTests extends GroovyTestCase {
+import com.amazonaws.services.ec2.model.KeyPairInfo
+import grails.converters.JSON
+import grails.converters.XML
 
-    void testLabeledEnvironmentVariables() {
-        assert ['export NETFLIX_PARTNERS=sony'] == new Names([partners: 'sony']).labeledEnvironmentVariables('NETFLIX_')
-        assert ['export NETFLIX_DEV_PHASE=stage', 'export NETFLIX_PARTNERS=sony'] ==
-                new Names([partners: 'sony', devPhase: 'stage']).labeledEnvironmentVariables('NETFLIX_')
-    }
+/**
+ * Used to interact with SSH key pairs registered in the Amazon Web Services API for the current account.
+ */
+class KeyPairController {
 
-    void testParts() {
-        assert ['Partners': 'sony'] == new Names([partners: 'sony']).parts()
-        assert ['Dev Phase': 'stage', 'Partners': 'sony'] == new Names([partners: 'sony', devPhase: 'stage']).parts()
+    def awsEc2Service
+
+    /**
+     * Display all the key pairs registered in the current account-region via REST calls.
+     */
+    def list = {
+        Collection<KeyPairInfo> keys = awsEc2Service.getKeys(UserContext.of(request))
+        withFormat {
+            xml { new XML(keys).render(response) }
+            json { new JSON(keys).render(response) }
+        }
     }
 }

@@ -15,7 +15,7 @@
  */
 package com.netflix.asgard.auth
 
-import com.netflix.asgard.ShiroTestUtil
+import com.netflix.asgard.mock.ShiroTestUtil
 import org.apache.shiro.subject.Subject
 import org.joda.time.DateTime
 import spock.lang.Specification
@@ -53,7 +53,6 @@ class ApiTokenSpec extends Specification {
         then:
         parsedToken.isValid('key')
     }
-
 
     def 'should handle when username and email the same'() {
         ApiToken apiToken = new ApiToken('TestScript', 'testUser@netflix.com', 30, 'key')

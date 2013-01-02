@@ -38,7 +38,6 @@ import com.netflix.asgard.model.SubnetTarget
 import com.netflix.asgard.model.ZoneAvailability
 import spock.lang.Specification
 
-@SuppressWarnings("GroovyPointlessArithmetic")
 class AwsEc2ServiceUnitSpec extends Specification {
 
     UserContext userContext
@@ -262,8 +261,6 @@ class AwsEc2ServiceUnitSpec extends Specification {
     }
 
     def 'should not try to find non cached VPC Security Group by name without specific errorCode'() {
-        SecurityGroup securityGroup = new SecurityGroup(groupId: 'sg-123', groupName: 'super_secure')
-
         when:
         SecurityGroup actualSecurityGroup =  awsEc2Service.getSecurityGroup(userContext, 'super_secure')
 
@@ -325,10 +322,10 @@ class AwsEc2ServiceUnitSpec extends Specification {
 
     private Collection<SecurityGroup> simulateWarGames() {
         SecurityGroupDsl.config {
-            wopr(7101, 7102) >> norad
-            joshua(7101, 7102) >> [wopr, globalthermonuclearwar, tictactoe]
-            modem(8080, 8080) >> joshua
-            falken(7101, 7102) >> joshua
+            wopr(7101, 7102) withIngress norad
+            joshua(7101, 7102) withIngress([wopr, globalthermonuclearwar, tictactoe])
+            modem(8080, 8080) withIngress joshua
+            falken(7101, 7102) withIngress joshua
         }
     }
 

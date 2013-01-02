@@ -22,7 +22,6 @@
   <title>EBS Volumes</title>
 </head>
 <body>
-  <!-- <div class="nav"></div> -->
   <div class="body">
     <h1>EBS Volumes in ${region.description}</h1>
     <g:if test="${flash.message}">
@@ -31,9 +30,9 @@
     <g:form method="post" class="validate">
       <div class="list">
         <div class="buttons">
-          <g:buttonSubmit class="create" action="save" value="Create Volume"/><br/>
-          <label>Volume Size (in GB):</label><g:textField name="volumeSize" size="12" placeholder="--ENTER SIZE--" class="required"/>
-          <label>Availability Zone:</label><g:select name="availabilityZone" from="${zoneList.zoneName}"/>
+          <g:buttonSubmit class="create requireLogin" action="save" value="Create Volume"/><br/>
+          <label>Volume Size (in GB):</label><g:textField name="volumeSize" size="12" placeholder="--ENTER SIZE--" class="required requireLogin"/>
+          <label>Availability Zone:</label><g:select name="availabilityZone" from="${zoneList.zoneName}" class="requireLogin"/>
         </div>
           <table class="sortable">
             <thead>

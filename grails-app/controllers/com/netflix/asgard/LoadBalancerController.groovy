@@ -44,6 +44,8 @@ class LoadBalancerController {
             delete: 'POST', save: 'POST', update: 'POST', addListener: 'POST', removeListener: 'POST'
     ]
 
+    def static editActions = ['prepareListener']
+
     def index = { redirect(action: 'list', params: params) }
 
     def list = {
@@ -236,7 +238,7 @@ class LoadBalancerController {
             String msg  = "Load Balancer '${name}' health check has been updated. "
             flash.message = flash.message ? flash.message + msg : msg
         }
-        redirect(action: 'show', params: [name: name])
+        redirect(action: 'show', params: [id: name])
     }
 
     // Used by both create and update to set the health check from page params

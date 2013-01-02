@@ -16,8 +16,10 @@
 package com.netflix.asgard
 
 import com.netflix.asgard.mock.Mocks
+import grails.test.mixin.TestFor
 import org.junit.Before
 
+@TestFor(ApplicationController)
 class ApplicationControllerTests {
 
     @Before
@@ -28,6 +30,7 @@ class ApplicationControllerTests {
         controller.applicationService = Mocks.applicationService()
         controller.awsLoadBalancerService = Mocks.awsLoadBalancerService()
         controller.configService = [alertingServiceConfigUrl: 'alertingServiceUrl']
+        controller.cloudReadyService = new CloudReadyService(configService: Mocks.configService())
     }
 
     void testShow() {

@@ -26,6 +26,7 @@ import com.google.common.collect.Multiset
 import com.netflix.asgard.model.ApplicationInstance
 import com.netflix.asgard.text.TextLink
 import com.netflix.asgard.text.TextLinkTemplate
+import com.netflix.frigga.ami.AppVersion
 import com.netflix.grails.contextParam.ContextParam
 import grails.converters.JSON
 import grails.converters.XML
@@ -34,6 +35,8 @@ import grails.converters.XML
 class InstanceController {
 
     final static allowedMethods = [terminate: 'POST', terminateAndShrinkGroup: 'POST']
+
+    def static editActions = ['associate']
 
     def index = { redirect(action: 'list', params:params) }
 
@@ -89,7 +92,7 @@ class InstanceController {
                             app(name: entry.element.packageName,
                                 version: entry.element.version,
                                 count: entry.count,
-                                cl: entry.element.changelist,
+                                cl: entry.element.commit,
                                 buildJob: entry.element.buildJobName,
                                 buildNum: entry.element.buildNumber)
                         }

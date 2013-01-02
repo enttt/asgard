@@ -76,8 +76,9 @@ class AwsAutoScalingService implements CacheInitializer, InitializingBean {
     def awsEc2Service
     def awsLoadBalancerService
     def awsSimpleDbService
-    def configService
     Caches caches
+    def cloudReadyService
+    def configService
     def discoveryService
     def emailerService
     def launchTemplateService
@@ -213,8 +214,12 @@ class AwsAutoScalingService implements CacheInitializer, InitializingBean {
         List<AutoScalingGroup> groups = candidates.findAll {
             Relationships.clusterFromGroupName(it.autoScalingGroupName) == clusterName }
 
+        Set<String> asgNamesForCacheRefresh = groups*.autoScalingGroupName as Set
+        // If a separate Asgard instance recently created an ASG then it wouldn't have been found in the cache.
+        asgNamesForCacheRefresh << clusterName
+
         // Reduce the ASG list to the ASGs that still exist in Amazon. As a happy side effect, update the ASG cache.
-        groups = getAutoScalingGroups(userContext, groups*.autoScalingGroupName, loadAutoScalingGroupsFrom)
+        groups = getAutoScalingGroups(userContext, asgNamesForCacheRefresh, loadAutoScalingGroupsFrom)
 
         if (groups.size()) {
             // This looks similar to buildAutoScalingGroupData() but it's faster to prepare the instance, ELB and AMI
@@ -259,8 +264,9 @@ class AwsAutoScalingService implements CacheInitializer, InitializingBean {
     }
 
     List<AutoScalingGroup> getAutoScalingGroupsForApp(UserContext userContext, String appName) {
-        def pat = ~/^${appName.toLowerCase()}(?:_\d+)?(?:-.+)?$/
-        getAutoScalingGroups(userContext).findAll { it.autoScalingGroupName ==~ pat }
+        getAutoScalingGroups(userContext).findAll {
+            appName.toLowerCase() == Relationships.appNameFromGroupName(it.autoScalingGroupName)
+        }
     }
 
     AutoScalingGroup getAutoScalingGroup(UserContext userContext, String name, From from = From.AWS) {
@@ -411,7 +417,7 @@ class AwsAutoScalingService implements CacheInitializer, InitializingBean {
         if (!autoScalingGroupName) { return [] }
         final List<ScalingPolicy> scalingPolicies = getScalingPoliciesForGroup(userContext, autoScalingGroupName)
         Map<ScalingPolicy, Collection<MetricAlarm>> scalingPolicyToAlarms = [:]
-        final Collection<Alarm> alarmReferences = scalingPolicies*.alarms.flatten()
+        final Collection<Alarm> alarmReferences = scalingPolicies*.alarms.flatten() as Collection<Alarm>
         final Collection<MetricAlarm> alarms = awsCloudWatchService.getAlarms(userContext, alarmReferences*.alarmName)
         final Map<String, ScalingPolicy> alarmNameToScalingPolicy = [:]
         scalingPolicies.each { ScalingPolicy scalingPolicy ->
@@ -582,7 +588,6 @@ class AwsAutoScalingService implements CacheInitializer, InitializingBean {
             awsClient.by(userContext.region).putScheduledUpdateGroupAction(request)
         }, Link.to(EntityType.scheduledAction, action.scheduledActionName), existingTask)
     }
-
 
     /**
      * Deletes a scheduled action.
@@ -871,12 +876,21 @@ class AwsAutoScalingService implements CacheInitializer, InitializingBean {
             }
             result = retrieveLaunchConfigurations(region, result.getNextToken())
         }
-        configs.each { ensureUserDataIsDecoded(it) }
+        configs.each { ensureUserDataIsDecodedAndTruncated(it) }
         configs
     }
 
     private DescribeLaunchConfigurationsResult retrieveLaunchConfigurations(Region region, String nextToken) {
         awsClient.by(region).describeLaunchConfigurations(new DescribeLaunchConfigurationsRequest().withNextToken(nextToken))
+    }
+
+    private void ensureUserDataIsDecodedAndTruncated(LaunchConfiguration launchConfiguration) {
+        ensureUserDataIsDecoded(launchConfiguration)
+        String userData = launchConfiguration.userData
+        int maxLength = configService.cachedUserDataMaxLength
+        if (userData.length() > maxLength) {
+            launchConfiguration.userData = userData.substring(0, maxLength)
+        }
     }
 
     private void ensureUserDataIsDecoded(LaunchConfiguration launchConfiguration) {
@@ -932,7 +946,8 @@ class AwsAutoScalingService implements CacheInitializer, InitializingBean {
 
     CreateAutoScalingGroupResult createLaunchConfigAndAutoScalingGroup(UserContext userContext,
             AutoScalingGroup groupTemplate, LaunchConfiguration launchConfigTemplate,
-            Collection<AutoScalingProcessType> suspendedProcesses, Task existingTask = null) {
+            Collection<AutoScalingProcessType> suspendedProcesses, boolean enableChaosMonkey = false,
+            Task existingTask = null) {
 
         CreateAutoScalingGroupResult result = new CreateAutoScalingGroupResult()
         String groupName = groupTemplate.autoScalingGroupName
@@ -953,7 +968,8 @@ class AwsAutoScalingService implements CacheInitializer, InitializingBean {
                 createLaunchConfiguration(userContext, launchConfigName, launchConfigTemplate.imageId,
                         launchConfigTemplate.keyName, securityGroups, userData,
                         launchConfigTemplate.instanceType, launchConfigTemplate.kernelId,
-                        launchConfigTemplate.ramdiskId, launchConfigTemplate.iamInstanceProfile, null, task)
+                        launchConfigTemplate.ramdiskId, launchConfigTemplate.iamInstanceProfile, null,
+                        launchConfigTemplate.spotPrice, task)
                 result.launchConfigCreated = true
             } catch (AmazonServiceException launchConfigCreateException) {
                 result.launchConfigCreateException = launchConfigCreateException
@@ -972,6 +988,13 @@ class AwsAutoScalingService implements CacheInitializer, InitializingBean {
                     result.launchConfigDeleteException = launchConfigDeleteException
                 }
             }
+
+            if (result.autoScalingGroupCreated && enableChaosMonkey) {
+                String cluster = Relationships.clusterFromGroupName(groupTemplate.autoScalingGroupName)
+                task.log("Enabling Chaos Monkey for ${cluster}.")
+                Region region = userContext.region
+                result.cloudReadyUnavailable = !cloudReadyService.enableChaosMonkeyForCluster(region, cluster)
+            }
         }, Link.to(EntityType.autoScaling, groupName), existingTask)
 
         result
@@ -979,7 +1002,8 @@ class AwsAutoScalingService implements CacheInitializer, InitializingBean {
 
     void createLaunchConfiguration(UserContext userContext, String name, String imageId, String keyName,
             Collection<String> securityGroups, String userData, String instanceType, String kernelId, String ramdiskId,
-            String iamInstanceProfile, Collection<BlockDeviceMapping> blockDeviceMappings, Task existingTask = null) {
+            String iamInstanceProfile, Collection<BlockDeviceMapping> blockDeviceMappings, String spotPrice,
+            Task existingTask = null) {
         taskService.runTask(userContext, "Create Launch Configuration '${name}' with image '${imageId}'", { Task task ->
             Check.notNull(name, LaunchConfiguration, "name")
             Check.notNull(imageId, LaunchConfiguration, "imageId")
@@ -992,6 +1016,7 @@ class AwsAutoScalingService implements CacheInitializer, InitializingBean {
                     .withUserData(encodedUserData).withInstanceType(instanceType)
                     .withBlockDeviceMappings(blockDeviceMappings)
                     .withIamInstanceProfile(iamInstanceProfile)
+                    .withSpotPrice(spotPrice)
             // Be careful not to set empties back into these fields--null is OK
             if (kernelId != '') { request.setKernelId(kernelId) }
             if (ramdiskId != '') { request.setRamdiskId(ramdiskId) }
@@ -1012,6 +1037,9 @@ class AwsAutoScalingService implements CacheInitializer, InitializingBean {
     }
 }
 
+/**
+ * Records the results of trying to create an Auto Scaling Group.
+ */
 class CreateAutoScalingGroupResult {
     String launchConfigName
     String autoScalingGroupName
@@ -1021,6 +1049,7 @@ class CreateAutoScalingGroupResult {
     AmazonServiceException autoScalingCreateException
     Boolean launchConfigDeleted
     AmazonServiceException launchConfigDeleteException
+    Boolean cloudReadyUnavailable // Just a warning, does not affect success.
 
     String toString() {
         StringBuilder output = new StringBuilder()
@@ -1028,8 +1057,7 @@ class CreateAutoScalingGroupResult {
             output.append("Launch Config '${launchConfigName}' has been created. ")
         }
         if (launchConfigCreateException) {
-            output.append('Could not create Launch Config for new Auto Scaling Group: ' +
-                    launchConfigCreateException.message)
+            output.append("Could not create Launch Config for new Auto Scaling Group: ${launchConfigCreateException}. ")
         }
         if (autoScalingGroupCreated) {
             output.append("Auto Scaling Group '${autoScalingGroupName}' has been created. ")
@@ -1039,8 +1067,10 @@ class CreateAutoScalingGroupResult {
         }
         if (launchConfigDeleted) { output.append("Launch Config '$launchConfigName' has been deleted. ") }
         if (launchConfigDeleteException) {
-            output.append("Failed to delete Launch Config '${launchConfigName}' because: " +
-                    launchConfigDeleteException.message)
+            output.append("Failed to delete Launch Config '${launchConfigName}': ${launchConfigDeleteException}. ")
+        }
+        if (cloudReadyUnavailable) {
+            output.append('Chaos Monkey was not enabled because Cloudready is currently unavailable. ')
         }
         output.toString()
     }

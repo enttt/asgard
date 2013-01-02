@@ -19,6 +19,7 @@ import com.amazonaws.services.autoscaling.model.AutoScalingGroup
 import com.amazonaws.services.autoscaling.model.LaunchConfiguration
 import com.amazonaws.services.ec2.model.Image
 import com.amazonaws.services.ec2.model.SecurityGroup
+import com.netflix.asgard.model.InstancePriceType
 import com.netflix.asgard.model.Subnets
 import com.netflix.asgard.model.ZoneAvailability
 import com.netflix.asgard.push.GroupActivateOperation
@@ -149,11 +150,12 @@ class PushService {
         List<String> subnetIds = Relationships.subnetIdsFromVpcZoneIdentifier(group.VPCZoneIdentifier)
         String vpcId = subnets.coerceLoneOrNoneFromIds(subnetIds)?.vpcId
         Map<String, String> purposeToVpcId = subnets.mapPurposeToVpcId()
+        String pricing = lc.spotPrice ? InstancePriceType.SPOT.name() : InstancePriceType.ON_DEMAND.name()
         Map result = [
                 appName: appName,
                 name: name,
                 cluster: Relationships.clusterFromGroupName(name),
-                variables: Relationships.dissectCompoundName(name),
+                variables: Relationships.parts(name),
                 actionName: actionName,
                 allTerminationPolicies: awsAutoScalingService.terminationPolicyTypes,
                 terminationPolicy: group.terminationPolicies[0],
@@ -171,13 +173,15 @@ class PushService {
                 selectedSecurityGroups: selectedSecurityGroups ?: lc.securityGroups,
                 defKey: lc.keyName,
                 keys: awsEc2Service.getKeys(userContext).sort { it.keyName.toLowerCase() },
-                iamInstanceProfile: lc.iamInstanceProfile,
+                iamInstanceProfile: lc.iamInstanceProfile ?: configService.defaultIamRole,
                 // Rolling push process options
                 relaunchCount: relaunchCount,
                 concurrentRelaunches: 1,
                 checkHealth: configService.doesRegionalDiscoveryExist(userContext.region),
                 afterBootWait: 30,
-                rudeShutdown: false
+                rudeShutdown: false,
+                pricing: pricing,
+                spotUrl: configService.spotUrl
         ]
         result
     }

@@ -15,7 +15,7 @@
     limitations under the License.
 
 --%>
-<%@ page import="com.netflix.asgard.Requests" %>
+<%@ page import="com.netflix.asgard.model.InstancePriceType; com.netflix.asgard.Requests" %>
 
 <tbody valign="top">
   <tr class="advanced">
@@ -30,7 +30,7 @@
     <td>
       <select id="imageId" name="imageId">
         <g:each var="im" in="${images}">
-          <option value="${im.imageId}" ${params.imageId == im.imageId || im.imageId == image ? "selected" : ""}>${im.imageLocation} | ${im.architecture} | ${im.imageId}</option>
+          <option value="${im.imageId}" ${params.imageId == im.imageId || im.imageId == image ? "selected" : ""}>${im.imageLocation} | ${im.imageId}</option>
         </g:each>
       </select>
       <br/>
@@ -69,6 +69,22 @@
     </td>
   </tr>
   <g:render template="/common/securityGroupSelection" />
+  <tr class="prop advanced">
+    <td class="name">
+      <label>Spot Instances<br/>(On-Demand price bid):</label>
+    </td>
+    <td>
+      <div>
+        <g:radio name="pricing" id="onDemand" value="${InstancePriceType.ON_DEMAND.name()}" checked="${!params.pricing || params.pricing == InstancePriceType.ON_DEMAND.name()}"/>
+        <label for="onDemand" class="choice">Disable (more reliable)</label>
+      </div>
+      <div>
+        <g:radio name="pricing" id="spot" value="${InstancePriceType.SPOT.name()}" checked="${params.pricing == InstancePriceType.SPOT.name()}"/>
+        <label for="spot" class="choice">Enable (reduced costs)</label>
+        &nbsp;<a href="${spotUrl}">What's this?</a></td>
+      </div>
+    </td>
+  </tr>
   <tr class="prop advanced">
     <td class="name">
       <label for="kernelId">Kernel ID:</label>

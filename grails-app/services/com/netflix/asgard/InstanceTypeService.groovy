@@ -133,18 +133,24 @@ class InstanceTypeService implements CacheInitializer {
             RegionalInstancePrices reservedPrices = getReservedPrices(region)
             RegionalInstancePrices spotPrices = getSpotPrices(region)
 
-            List<InstanceTypeData> instanceTypes = InstanceType.values().collect { InstanceType instanceType ->
+            Set<InstanceType> awsInstanceTypes = InstanceType.values() as Set
+            List<InstanceTypeData> instanceTypes = awsInstanceTypes.findResults { InstanceType instanceType ->
                 HardwareProfile hardwareProfile = hardwareProfiles.find { it.instanceType == instanceType.toString() }
+                if (!hardwareProfile) {
+                    log.info "Unable to resolve ${instanceType}"
+                    return null
+                }
                 new InstanceTypeData(
-                        hardwareProfile: hardwareProfile,
-                        linuxOnDemandPrice: onDemandPrices.get(instanceType, InstanceProductType.LINUX_UNIX),
-                        linuxReservedPrice: reservedPrices.get(instanceType, InstanceProductType.LINUX_UNIX),
-                        linuxSpotPrice: spotPrices.get(instanceType, InstanceProductType.LINUX_UNIX),
-                        windowsOnDemandPrice: onDemandPrices.get(instanceType, InstanceProductType.WINDOWS),
-                        windowsReservedPrice: reservedPrices.get(instanceType, InstanceProductType.WINDOWS),
-                        windowsSpotPrice: spotPrices.get(instanceType, InstanceProductType.WINDOWS)
+                    hardwareProfile: hardwareProfile,
+                    linuxOnDemandPrice: onDemandPrices.get(instanceType, InstanceProductType.LINUX_UNIX),
+                    linuxReservedPrice: reservedPrices.get(instanceType, InstanceProductType.LINUX_UNIX),
+                    linuxSpotPrice: spotPrices.get(instanceType, InstanceProductType.LINUX_UNIX),
+                    windowsOnDemandPrice: onDemandPrices.get(instanceType, InstanceProductType.WINDOWS),
+                    windowsReservedPrice: reservedPrices.get(instanceType, InstanceProductType.WINDOWS),
+                    windowsSpotPrice: spotPrices.get(instanceType, InstanceProductType.WINDOWS)
                 )
             }
+            instanceTypes.sort { a, b -> a.instanceType <=> b.instanceType }
             // Only include types that have prices listed for this region
             Collection<InstanceTypeData> relevantInstanceTypes = instanceTypes.findAll { it.linuxOnDemandPrice }
             Collection<String> foundInstanceTypeNames = relevantInstanceTypes*.name
@@ -293,6 +299,9 @@ class InstanceTypeService implements CacheInitializer {
         typeSizeCodesToInstanceTypes.put(new JsonTypeSizeCombo('stdResI', 'sm'), InstanceType.M1Small)
         typeSizeCodesToInstanceTypes.put(new JsonTypeSizeCombo('stdResI', 'lg'), InstanceType.M1Large)
         typeSizeCodesToInstanceTypes.put(new JsonTypeSizeCombo('stdResI', 'xl'), InstanceType.M1Xlarge)
+        // Double-check and uncomment second generation M3 instance types when InstanceType enum is ready for them
+        // typeSizeCodesToInstanceTypes.put(new JsonTypeSizeCombo('secgenstdResI', 'xl'), InstanceType.M3Xlarge)
+        // typeSizeCodesToInstanceTypes.put(new JsonTypeSizeCombo('secgenstdResI', 'xxl'), InstanceType.M32xlarge)
         typeSizeCodesToInstanceTypes.put(new JsonTypeSizeCombo('uResI', 'u'), InstanceType.T1Micro)
         typeSizeCodesToInstanceTypes.put(new JsonTypeSizeCombo('hiMemResI', 'xl'), InstanceType.M2Xlarge)
         typeSizeCodesToInstanceTypes.put(new JsonTypeSizeCombo('hiMemResI', 'xxl'), InstanceType.M22xlarge)
@@ -308,18 +317,25 @@ class InstanceTypeService implements CacheInitializer {
         typeSizeCodesToInstanceTypes.put(new JsonTypeSizeCombo('stdODI', 'med'), InstanceType.M1Medium)
         typeSizeCodesToInstanceTypes.put(new JsonTypeSizeCombo('stdODI', 'lg'), InstanceType.M1Large)
         typeSizeCodesToInstanceTypes.put(new JsonTypeSizeCombo('stdODI', 'xl'), InstanceType.M1Xlarge)
+        // Double-check and uncomment second generation M3 instance types when InstanceType enum is ready for them
+        // typeSizeCodesToInstanceTypes.put(new JsonTypeSizeCombo('secgenstdODI', 'xl'), InstanceType.M3Xlarge)
+        // typeSizeCodesToInstanceTypes.put(new JsonTypeSizeCombo('secgenstdODI', 'xxl'), InstanceType.M32xlarge)
         typeSizeCodesToInstanceTypes.put(new JsonTypeSizeCombo('uODI', 'u'), InstanceType.T1Micro)
         typeSizeCodesToInstanceTypes.put(new JsonTypeSizeCombo('hiMemODI', 'xl'), InstanceType.M2Xlarge)
         typeSizeCodesToInstanceTypes.put(new JsonTypeSizeCombo('hiMemODI', 'xxl'), InstanceType.M22xlarge)
         typeSizeCodesToInstanceTypes.put(new JsonTypeSizeCombo('hiMemODI', 'xxxxl'), InstanceType.M24xlarge)
         typeSizeCodesToInstanceTypes.put(new JsonTypeSizeCombo('hiCPUODI', 'med'), InstanceType.C1Medium)
         typeSizeCodesToInstanceTypes.put(new JsonTypeSizeCombo('hiCPUODI', 'xl'), InstanceType.C1Xlarge)
+        typeSizeCodesToInstanceTypes.put(new JsonTypeSizeCombo('hiIoODI', 'xxxxl'), InstanceType.Hi14xlarge)
 
         // Spot json compound code names
         typeSizeCodesToInstanceTypes.put(new JsonTypeSizeCombo('stdSpot', 'sm'), InstanceType.M1Small)
         typeSizeCodesToInstanceTypes.put(new JsonTypeSizeCombo('stdSpot', 'med'), InstanceType.M1Medium)
         typeSizeCodesToInstanceTypes.put(new JsonTypeSizeCombo('stdSpot', 'lg'), InstanceType.M1Large)
         typeSizeCodesToInstanceTypes.put(new JsonTypeSizeCombo('stdSpot', 'xl'), InstanceType.M1Xlarge)
+        // Double-check and uncomment second generation M3 instance types when InstanceType enum is ready for them
+        // typeSizeCodesToInstanceTypes.put(new JsonTypeSizeCombo('secgenstdSpot', 'xl'), InstanceType.M3Xlarge)
+        // typeSizeCodesToInstanceTypes.put(new JsonTypeSizeCombo('secgenstdSpot', 'xxl'), InstanceType.M32xlarge)
         typeSizeCodesToInstanceTypes.put(new JsonTypeSizeCombo('uSpot', 'u'), InstanceType.T1Micro)
         typeSizeCodesToInstanceTypes.put(new JsonTypeSizeCombo('hiMemSpot', 'xl'), InstanceType.M2Xlarge)
         typeSizeCodesToInstanceTypes.put(new JsonTypeSizeCombo('hiMemSpot', 'xxl'), InstanceType.M22xlarge)

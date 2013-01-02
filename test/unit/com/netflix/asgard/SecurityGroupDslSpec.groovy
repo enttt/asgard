@@ -20,7 +20,6 @@ import com.amazonaws.services.ec2.model.SecurityGroup
 import com.amazonaws.services.ec2.model.UserIdGroupPair
 import com.amazonaws.services.ec2.model.IpPermission
 
-@SuppressWarnings("GroovyPointlessArithmetic")
 class SecurityGroupDslSpec extends Specification {
 
     def 'should create Security Groups with ingress permissions'() {
@@ -44,10 +43,10 @@ class SecurityGroupDslSpec extends Specification {
 
         expect:
         SecurityGroupDsl.config {
-            wopr(7101, 7102) >> norad
-            joshua(7101, 7102) >> [wopr, globalthermonuclearwar, tictactoe]
-            modem(8080, 8080) >> joshua
-            falken(7101, 7102) >> joshua
+            wopr(7101, 7102) withIngress norad
+            joshua(7101, 7102) withIngress([wopr, globalthermonuclearwar, tictactoe])
+            modem(8080, 8080) withIngress joshua
+            falken(7101, 7102) withIngress joshua
         } == expectedSecurityGroups
     }
 
@@ -61,7 +60,7 @@ class SecurityGroupDslSpec extends Specification {
 
         expect:
         SecurityGroupDsl.config {
-            wopr(7101, 7102) << norad
+            wopr(7101, 7102) withEgress norad
         } == expectedSecurityGroups
     }
 
@@ -77,8 +76,8 @@ class SecurityGroupDslSpec extends Specification {
 
         expect:
         SecurityGroupDsl.config {
-            wopr(7101, 7102) >> norad
-            wopr(7201, 7202) << norad
+            wopr(7101, 7102) withIngress norad
+            wopr(7201, 7202) withEgress norad
         } == expectedSecurityGroups
     }
 

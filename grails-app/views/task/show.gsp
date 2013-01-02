@@ -32,7 +32,7 @@
       <g:form method="post">
         <input type="hidden" name="id" value="${task.id}"/>
         <div class="buttons" id="taskCancellationForm">
-          <g:buttonSubmit class="stop" onclick="return confirm('Really stop task ${StringEscapeUtils.escapeJavaScript(task.name)} ?');" action="cancel" value="Stop Task"/>
+          <g:buttonSubmit class="stop" data-warning="Really stop task ${StringEscapeUtils.escapeJavaScript(task.name)} ?" action="cancel" value="Stop Task"/>
         </div>
       </g:form>
     </g:if>
@@ -72,6 +72,12 @@
           <td class="name">${ticketLabel}:</td>
           <td class="value">${task.userContext.ticket}</td>
         </tr>
+        <g:if test="${authenticationEnabled}">
+          <tr class="prop">
+            <td class="name">Username:</td>
+            <td class="value">${task.userContext.username}</td>
+          </tr>
+        </g:if>
         <tr class="prop">
           <td class="name">Client Host Name<br/>(best guess,<br/>may be wrong):</td>
           <td class="value">${task.userContext.clientHostName}</td>
